@@ -14,11 +14,13 @@
 # and limitations under the License.
 
 
+import io
 import json
 from datetime import datetime, timezone
 
 import backoff
 import phantom.app as phantom
+from phantom.vault import Vault
 import requests
 from dateutil.parser import ParserError, parse as dateutil_parse
 from phantom.action_result import ActionResult
@@ -72,6 +74,126 @@ class TenableioConnector(BaseConnector):
 
         self.save_progress(TENABLE_IO_MESSAGE_TEST_CONNECTIVITY_PASSED)
         return action_result.set_status(phantom.APP_SUCCESS)
+
+    def _resolve_last_run(self, param, action_result):
+        """_resolve_last_run
+        Get the last run timestamp for this playbook. if last run is present in state that is the 
+        used value, next is the configured value, and finally if no datetime is set then an "all time"
+        download will be run.
+        """
+        saved = self._state.get(TENABLE_IO_STATE_LAST_RUN)
+        if saved is not None:
+            try:
+                return datetime.fromtimestamp(int(saved), timezone.utc), True
+            except (ValueError, OverflowError, OSError, TypeError):
+                return (
+                    action_result.set_status(
+                        phantom.APP_ERROR,
+                        TENABLE_IO_MESSAGE_INVALID_SAVED_STATE.format(value=saved),
+                    ),
+                    False,
+                )
+
+        user_value = param.get(TENABLE_IO_PARAM_LAST_MODIFIED)
+        if user_value is not None and str(user_value).strip() != "":
+            try:
+                return self._parse_datetime(str(user_value).strip()), True
+            except (ParserError, OverflowError, ValueError):
+                return (
+                    action_result.set_status(phantom.APP_ERROR, TENABLE_IO_MESSAGE_INVALID_DATETIME),
+                    False,
+                )
+
+        return None, True
+
+    def _handle_download_scans(self, param):
+        """_handle_download_changed_scans
+        Downloads all scans which have been changed or completed since the last run of the playbook.
+        If no previous run has occured either the configured last_run or all time (default) will be
+        selected
+        """
+        self.debug_print("Start _handle_download_changed_scans")
+        action_result = self.add_action_result(ActionResult(dict(param)))
+
+        export_format = param.get(TENABLE_IO_PARAM_EXPORT_FORMAT, "nessus")
+        folder_id = param.get(TENABLE_IO_PARAM_FOLDER_ID)
+
+        last_run, ok = self._resolve_last_run(param, action_result)
+        if not ok:
+            return action_result.get_status()
+
+        # set start time to before scan so subsequent runs dont miss documents that changed
+        # mid-playbook run
+        run_start_epoch = int(datetime.now(timezone.utc).timestamp())
+
+        try:
+            scans = self._client.scans.list(folder_id, last_run)
+            changed_scans = [
+                s for s in scans if s.get("status") == TENABLE_IO_SCAN_STATUS_COMPLETE
+            ]
+
+            if not changed_scans:
+                self._state[TENABLE_IO_STATE_LAST_RUN] = run_start_epoch
+                summary = action_result.update_summary({})
+                summary[TENABLE_IO_OUTPUT_TOTAL_DOWNLOADED] = 0
+                summary[TENABLE_IO_OUTPUT_DOWNLOAD_FAILURES] = 0
+                return action_result.set_status(phantom.APP_SUCCESS, TENABLE_IO_MESSAGE_NO_CHANGED_SCANS)
+
+            container_id = self.get_container_id()
+            download_failures = 0
+
+            for scan in changed_scans:
+                scan_id = scan["id"]
+                file_name = f"tenableio_scan_{scan_id}.{export_format}"
+                try:
+                    fobj = io.BytesIO()
+                    self._client.scans.export(scan_id, fobj=fobj, format=export_format)
+                    fobj.seek(0)
+
+                    success, message, vault_id = Vault.create_attachment(
+                        fobj.read(), container_id, file_name=file_name
+                    )
+                    if not success:
+                        download_failures += 1
+                        self.debug_print(TENABLE_IO_MESSAGE_VAULT_ADD_FAILED.format(error=message))
+                        continue
+                except Exception as e:
+                    download_failures += 1
+                    self.debug_print(f"Failed to export/vault scan {scan_id}: {e!s}")
+                    continue
+
+                file_path = Vault.get_file_path(vault_id)
+
+                action_result.add_data({
+                    TENABLE_IO_OUTPUT_SCAN_ID: scan_id,
+                    "scan_name": scan.get("name"),
+                    "vault_id": vault_id,
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "last_modification_date": scan.get("last_modification_date"),
+                })
+
+            if download_failures == 0:
+                self._state[TENABLE_IO_STATE_LAST_RUN] = run_start_epoch
+            else:
+                self.save_progress(
+                    f"{download_failures} scan(s) failed; leaving saved watermark unchanged for retry"
+                )
+
+            summary = action_result.update_summary({})
+            summary[TENABLE_IO_OUTPUT_TOTAL_DOWNLOADED] = len(action_result.get_data())
+            summary[TENABLE_IO_OUTPUT_DOWNLOAD_FAILURES] = download_failures
+
+            self.debug_print("End _handle_download_changed_scans")
+            return action_result.set_status(phantom.APP_SUCCESS)
+
+        except (OverflowError, ParserError):
+            return action_result.set_status(phantom.APP_ERROR, TENABLE_IO_MESSAGE_INVALID_DATETIME)
+        except Exception as e:
+            message = " ".join([TENABLE_IO_MESSAGE_DOWNLOAD_SCANS_FAILED, str(e)])[
+                :TENABLE_IO_MAX_ERROR_MESSAGE_LENGTH
+            ]
+            return action_result.set_status(phantom.APP_ERROR, message)
 
     def _handle_list_policies(self, param):
         self.debug_print("Start _handle_list_policies")
@@ -244,6 +366,8 @@ class TenableioConnector(BaseConnector):
             ret_val = self._handle_scan_host(param)
         elif action_id == TENABLE_IO_ACTION_ID_DELETE_SCAN:
             ret_val = self._handle_delete_scan(param)
+        elif action_id == TENABLE_IO_ACTION_ID_DOWNLOAD_SCANS:
+            ret_val = self._handle_download_scans(param)
 
         return ret_val
 

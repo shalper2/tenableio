@@ -22,6 +22,7 @@ TENABLE_IO_ACTION_ID_LIST_SCANNERS = "list_scanners"
 TENABLE_IO_ACTION_ID_LIST_POLICIES = "list_policies"
 TENABLE_IO_ACTION_ID_SCAN_HOST = "scan_host"
 TENABLE_IO_ACTION_ID_DELETE_SCAN = "delete_scan"
+TENABLE_IO_ACTION_ID_DOWNLOAD_SCANS = "download_scans"
 
 TENABLE_IO_PARAM_FOLDER_ID = "folder_id"
 TENABLE_IO_PARAM_LAST_MODIFIED = "last_modified"
@@ -53,6 +54,10 @@ TENABLE_IO_MESSAGE_GETTING_SCAN_DETAILS = "Getting details for scan {} using sca
 TENABLE_IO_MESSAGE_SCAN_ENDPOINT_FAILED = "Scan Endpoint Failed"
 TENABLE_IO_MESSAGE_DELETE_SCAN_COMPLETED = "Delete Scan completed"
 TENABLE_IO_MESSAGE_DELETE_SCAN_FAILED = "Delete Scan Failed."
+TENABLE_IO_MESSAGE_DOWNLOAD_SCANS_FAILED = "Failed to download changed scans"
+TENABLE_IO_MESSAGE_NO_CHANGED_SCANS = "No scans changed since last run"
+TENABLE_IO_MESSAGE_INVALID_SAVED_STATE = "Invalid saved last_run_time in state: {value}"
+TENABLE_IO_MESSAGE_VAULT_ADD_FAILED = "Failed to add scan file to vault: {error}"
 
 TENABLE_IO_OUTPUT_SCAN_ID = TENABLE_IO_PARAM_SCAN_ID
 TENABLE_IO_OUTPUT_SCAN_COUNT = "scan_count"
@@ -60,9 +65,12 @@ TENABLE_IO_OUTPUT_SCANNER_COUNT = "scanner_count"
 TENABLE_IO_OUTPUT_POLICY_COUNT = "policy_count"
 TENABLE_IO_OUTPUT_TOTAL_VULNS = "total_vulns"
 TENABLE_IO_OUTPUT_DELETE_STATUS = "delete_status"
+TENABLE_IO_OUTPUT_TOTAL_DOWNLOADED = "total_scans_downloaded"
+TENABLE_IO_OUTPUT_DOWNLOAD_FAILURES = "download_failures"
 
 # See https://developer.tenable.com/docs/scan-status-tio
 TENABLE_IO_SCAN_STATUS_COMPLETE = "completed"
+TENABLE_IO_STATE_LAST_RUN = "last_run_time"
 TENABLE_IO_TERMINAL_SCAN_STATUS = ["aborted", "canceled", "completed", "stopped"]
 TENABLE_IO_VULNERABILITY_SEVERITIES_FOR_SUMMARY = ["low", "medium", "high", "critical"]
 
@@ -74,5 +82,6 @@ TENABLE_IO_DEFAULT_REQUEST_TIMEOUT = 60  # in seconds
 
 TENABLE_IO_MIN_PARAM_SCAN_TIMEOUT = 0  # in seconds
 TENABLE_IO_MAX_PARAM_SCAN_TIMEOUT = 4 * TENABLE_IO_DEFAULT_SCAN_RUNNING_TIMEOUT  # in seconds
+TENABLE_IO_PARAM_EXPORT_FORMAT = "export_format"
 
 TENABLE_IO_MAX_ERROR_MESSAGE_LENGTH = 900  # SOAR UI doesn't properly display the beginning of long lines
