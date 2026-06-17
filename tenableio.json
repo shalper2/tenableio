@@ -47,10 +47,10 @@
             "versions": "EQ(*)"
         },
         {
-           "action":"download changed scans",
+           "action":"download scans",
            "description":"Download all completed scans created or modified since the last successful run, storing each in the vault. Uses the asset's saved state as the watermark; falls back to the configured last modified time on first run, or downloads all scans if neither is set",
            "type":"investigate",
-           "identifier":"download_changed_scans",
+           "identifier":"download_scans",
            "read_only":false,
            "parameters":{
               "folder_id":{
