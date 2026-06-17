@@ -48,7 +48,7 @@
         },
         {
            "action":"download scans",
-           "description":"Download all completed scans created or modified since the last successful run, storing each in the vault. Uses the asset's saved state as the watermark; falls back to the configured last modified time on first run, or downloads all scans if neither is set",
+           "description":"Download all completed scans since last playbook run",
            "type":"investigate",
            "identifier":"download_scans",
            "read_only":false,
